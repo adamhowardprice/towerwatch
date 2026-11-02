@@ -17,21 +17,17 @@ jobs:
   smoke:
     # The server needs a native x86-64 host. Mono aborts under Rosetta.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
       - name: Download the dedicated server
         run: make fetch-full
 
-      - name: Boot the server with the mod
+      - name: Run the proof of concept
         run: make smoke
 
-      - name: Build the package
-        if: success() || failure()
-        run: make package
-
-      # Upload only logs and the mod package. Never upload .valheim-server, which has game files.
+      # Upload only logs. Never upload .valheim-server, which has game files.
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -39,11 +35,3 @@ jobs:
           name: smoke-logs
           path: smoke-logs/
           if-no-files-found: warn
-
-      - name: Upload package
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TowerArchers-package
-          path: dist/*.zip
-          if-no-files-found: error
