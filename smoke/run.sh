@@ -10,6 +10,12 @@ JOTUNN_VERSION=2.30.2
 WAIT_SECONDS=${WAIT_SECONDS:-420}
 LOG="$SERVER/BepInEx/LogOutput.log"
 
+collect_logs() {
+    mkdir -p /work/smoke-logs
+    cp "$LOG" "$CACHE/stdout.log" /work/smoke-logs/ 2>/dev/null || true
+}
+trap collect_logs EXIT
+
 mkdir -p "$CACHE"
 if [ ! -f "$CACHE/bepinex.zip" ]; then
     curl -fsSL -o "$CACHE/bepinex.zip" "https://thunderstore.io/package/download/denikson/BepInExPack_Valheim/$BEPINEX_VERSION/"
@@ -68,10 +74,29 @@ grep -nE "TowerArcher|ArcherBowFire|WatchPost" "$LOG" || true
 echo "--- Errors and warnings from mods"
 grep -nE "^\[(Error|Fatal|Warning) *: *(Jotunn|TowerArchers|BepInEx|HarmonyX)" "$LOG" || true
 
-if grep -q "Registered ArcherBowFire, TowerArcher, and WatchPost" "$LOG" \
-    && ! grep -qE "^\[(Error|Fatal) *: *(Jotunn|TowerArchers)" "$LOG"; then
-    echo "PASS: the mod registered with no mod errors."
-else
-    echo "FAIL: see $LOG"
-    exit 1
+echo "--- Exceptions in mod code"
+grep -n "at TowerArchers\." "$LOG" "$CACHE/stdout.log" || true
+echo "--- Server start"
+grep -n "Game server connected" "$LOG" "$CACHE/stdout.log" || true
+
+status=0
+if ! grep -q "Registered ArcherBowFire, TowerArcher, and WatchPost" "$LOG"; then
+    echo "FAIL: the mod did not register its prefabs."
+    status=1
 fi
+if ! grep -q "Game server connected" "$LOG" "$CACHE/stdout.log"; then
+    echo "FAIL: the server did not finish its start."
+    status=1
+fi
+if grep -qE "^\[(Error|Fatal) *: *(Jotunn|TowerArchers)" "$LOG"; then
+    echo "FAIL: Jotunn or the mod logged an error."
+    status=1
+fi
+if grep -q "at TowerArchers\." "$LOG" "$CACHE/stdout.log"; then
+    echo "FAIL: an exception passed through mod code."
+    status=1
+fi
+if [ "$status" -eq 0 ]; then
+    echo "PASS: the server started, and the mod registered with no errors."
+fi
+exit "$status"

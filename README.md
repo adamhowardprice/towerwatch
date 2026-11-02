@@ -47,7 +47,7 @@ The DLL is at `src/TowerArchers/bin/Release/TowerArchers.dll`. The r2modman pack
 Other commands:
 
 - `make decompile` writes the game source to `.decompiled/`, to check names.
-- `make fetch-full` downloads the whole server (about 2 GB). `make smoke` then boots it with the mod. This needs an x86-64 host. See [Verification status](#verification-status).
+- `make fetch-full` downloads the whole server (about 2 GB). `make smoke` then boots it with the mod. This needs an x86-64 host, so the `Smoke` GitHub Actions workflow runs it. The workflow uploads the logs and the package as artifacts.
 
 To build with a local .NET SDK and deploy to a game folder:
 
@@ -119,7 +119,7 @@ Built against Valheim 1.0.21 (dedicated server), Jotunn 2.30.2, and BepInEx 5.4.
 |---|---|
 | Class, field, and method names | Compiled against the publicized game assembly, and read in decompiled code. |
 | Prefab names | Found in the game asset files. |
-| Plugin loads on a server | **Not verified.** The vanilla server also crashes under Rosetta in Docker on Apple Silicon (`tramp-amd64.c:641`). Run `make smoke` on an x86-64 host. |
+| Plugin loads on a server | The `Smoke` workflow checks this. The server crashes under Rosetta in Docker on Apple Silicon (`tramp-amd64.c:641`), even with no mods, so `make smoke` cannot run there. |
 | All behavior in [Test in game](#test-in-game) | **Not verified.** |
 | Draugr bow attack values | **Not verified.** They exist only in game data, and the plugin logs them at startup. |
 | Bow model on the Draugr body | **Not verified.** Check it visually. |
