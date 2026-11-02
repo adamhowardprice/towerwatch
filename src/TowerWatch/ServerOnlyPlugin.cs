@@ -141,7 +141,8 @@ namespace TowerWatch
             // A player can own the sign, and only the owner can write to its ZDO.
             sign.SetOwner(ZDOMan.GetSessionID());
 
-            var position = FindStandingPoint(sign.GetPosition());
+            // The archer stands in front of the sign, because the sign has a collider.
+            var position = FindStandingPoint(sign.GetPosition() + sign.GetRotation() * Vector3.forward * 0.8f);
             var archer = Instantiate(ZNetScene.instance.GetPrefab(ArcherPrefab), position, Quaternion.identity);
             var zdo = archer.GetComponent<ZNetView>().GetZDO();
             zdo.Set(ArcherMarker, true);
@@ -265,7 +266,10 @@ namespace TowerWatch
             }
             else
             {
-                _ai.MoveTowards(offset.normalized, run: false);
+                // BaseAI.MoveTowards also turns the character toward the anchor, and an archer
+                // that faces away from its target never attacks. SetMoveDir keeps the aim.
+                _humanoid.SetMoveDir(offset.normalized);
+                _humanoid.SetRun(false);
             }
         }
     }

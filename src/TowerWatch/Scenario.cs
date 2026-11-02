@@ -53,7 +53,7 @@ namespace TowerWatch
             }
             else
             {
-                yield return new WaitForSeconds(30f);
+                yield return new WaitForSeconds(60f);
             }
             Report($"DONE phase={phase} failures={_failures}");
         }
@@ -197,7 +197,14 @@ namespace TowerWatch
                     nextSample += 10f;
                     var ai = archerObject.GetComponent<MonsterAI>();
                     var targetName = ai.GetTargetCreature() ? ai.GetTargetCreature().name : "none";
-                    Report($"DIAG {name}: target={targetName} alerted={ai.IsAlerted()} see={ai.CanSeeTarget(targetCharacter)} weapon={(archerObject.GetComponent<Humanoid>().GetCurrentWeapon()?.m_shared.m_name ?? "none")} starts={Starts} refusals={Refusals} triggers={Triggers} shots={Shots} hits={Hits}");
+                    var weapon = archerObject.GetComponent<Humanoid>().GetCurrentWeapon();
+                    var toTarget = targetCharacter.transform.position - archerObject.transform.position;
+                    toTarget.y = 0f;
+                    var forward = archerObject.transform.forward;
+                    forward.y = 0f;
+                    Report($"DIAG {name}: target={targetName} alerted={ai.IsAlerted()} see={ai.CanSeeTarget(targetCharacter)} weapon={weapon?.m_shared.m_name ?? "none"} range={weapon?.m_shared.m_aiAttackRange} interval={weapon?.m_shared.m_aiAttackInterval} maxAngle={weapon?.m_shared.m_aiAttackMaxAngle} " +
+                        $"facingError={Vector3.Angle(forward, toTarget):0}deg anchorOffset={Utils.DistanceXZ(archerObject.transform.position, anchor):0.00}m sinceAttack={archer.GetTimeSinceLastAttack():0.0} inAttack={archer.InAttack()} canUse={(weapon != null && ai.CanUseAttack(weapon))} " +
+                        $"starts={Starts} refusals={Refusals} triggers={Triggers} shots={Shots} hits={Hits}");
                 }
                 maxDrift = Mathf.Max(maxDrift, Vector3.Distance(archerObject.transform.position, anchor));
                 burned |= targetCharacter.GetSEMan().HaveStatusEffect("Burning".GetStableHashCode());

@@ -99,6 +99,11 @@ fi
 run_phase crossplay -crossplay
 echo "=== Crossplay backend lines"
 grep -iE "playfab|party|join code|crossplay|backend|Game server connected|Session" "$LOGS/stdout-crossplay.log" | cut -c1-200 | head -n 40 || true
+if grep -qE "Failed to open plugin.*libparty|DllNotFoundException: libParty" "$LOGS/stdout-crossplay.log"; then
+    echo "FAIL: the crossplay library did not load."
+    ldd "$SERVER/valheim_server_Data/Plugins/libparty.so" | grep "not found" || true
+    status=1
+fi
 
 if [ "$status" -eq 0 ]; then
     echo "PASS: all phases finished with zero failures."
