@@ -68,6 +68,10 @@ run_phase() {
         if grep -q "SCENARIO DONE" "$LOG" 2>/dev/null; then
             break
         fi
+        # An exception ends the scenario coroutine, so DONE can never appear.
+        if grep -q "at Scenario\." "$stdout_log" 2>/dev/null; then
+            break
+        fi
         sleep 5
         elapsed=$((elapsed + 5))
     done

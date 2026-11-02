@@ -28,7 +28,9 @@ namespace Scenario
         internal static int Shots;
         internal static int Hits;
         internal static float LastHitFire;
+        internal static Vector3? Focus;
 
+        private bool _areaReady;
         private int _failures;
         private Vector3 _site;
 
@@ -63,6 +65,10 @@ namespace Scenario
                 yield break;
             }
             yield return StartCoroutine(ActivateArea(_site));
+            if (!_areaReady)
+            {
+                yield break;
+            }
 
             ZoneSystem.instance.GetSolidHeight(_site, out float ground);
             var postPosition = new Vector3(_site.x, ground + TowerHeight, _site.z);
@@ -113,6 +119,10 @@ namespace Scenario
                 float.Parse(parts[1], CultureInfo.InvariantCulture),
                 float.Parse(parts[2], CultureInfo.InvariantCulture));
             yield return StartCoroutine(ActivateArea(_site));
+            if (!_areaReady)
+            {
+                yield break;
+            }
             yield return new WaitForSeconds(5f);
 
             Check("one post after restart", CountZdos(PostPrefab) == 1, $"count={CountZdos(PostPrefab)}");
@@ -241,7 +251,7 @@ namespace Scenario
 
         private IEnumerator AreaReloadRound(ZDOID archerId, Vector3 anchor)
         {
-            ZNet.instance.SetReferencePosition(_site + new Vector3(3000f, 0f, 0f));
+            Focus = _site + new Vector3(3000f, 0f, 0f);
             var start = Time.time;
             while (ZNetScene.instance.FindInstance(archerId) && Time.time - start < 60f)
             {
@@ -252,6 +262,10 @@ namespace Scenario
             Check("no despawn on unload", CountZdos(ArcherPrefab) == 1, $"count={CountZdos(ArcherPrefab)}");
 
             yield return StartCoroutine(ActivateArea(_site));
+            if (!_areaReady)
+            {
+                yield break;
+            }
             yield return new WaitForSeconds(5f);
 
             var archerObject = ZNetScene.instance.FindInstance(archerId);
@@ -358,13 +372,15 @@ namespace Scenario
 
         private IEnumerator ActivateArea(Vector3 position)
         {
-            ZNet.instance.SetReferencePosition(position);
+            Focus = position;
             var start = Time.time;
-            while (!(ZoneSystem.instance.IsZoneLoaded(position) && ZNetScene.instance.IsAreaReady(position)) && Time.time - start < 120f)
+            _areaReady = false;
+            while (!_areaReady && Time.time - start < 120f)
             {
+                _areaReady = ZoneSystem.instance.IsZoneLoaded(position) && ZNetScene.instance.IsAreaReady(position);
                 yield return new WaitForSeconds(1f);
             }
-            Report($"INFO area active at {position} after {Time.time - start:0}s");
+            Check("area becomes active", _areaReady, $"position={position} after {Time.time - start:0}s");
             yield return new WaitForSeconds(3f);
         }
 
@@ -406,6 +422,21 @@ namespace Scenario
         private void Report(string message)
         {
             Logger.LogInfo("SCENARIO " + message);
+        }
+    }
+
+    // Game.FixedUpdate sets the reference position to a far point on each physics tick. A player
+    // normally overrides this, but the server has no player. The reference position selects the
+    // active area, so the scenario replaces each write with its own position.
+    [HarmonyPatch(typeof(ZNet), nameof(ZNet.SetReferencePosition))]
+    internal static class SetReferencePositionPatch
+    {
+        private static void Prefix(ref Vector3 pos)
+        {
+            if (ScenarioPlugin.Focus.HasValue)
+            {
+                pos = ScenarioPlugin.Focus.Value;
+            }
         }
     }
 
