@@ -53,6 +53,10 @@ namespace Scenario
                 yield return new WaitForSeconds(1f);
             }
 
+            // The test has no tower below the post. This must apply to the prefab, because an area
+            // reload creates a new instance, and a post with no support collapses.
+            ZNetScene.instance.GetPrefab(PostPrefab).GetComponent<WearNTear>().m_noSupportWear = false;
+
             yield return phase == "reload" ? StartCoroutine(ReloadPhase()) : StartCoroutine(FirstPhase());
             Report($"DONE phase={phase} failures={_failures}");
         }
@@ -77,8 +81,6 @@ namespace Scenario
             var postPosition = new Vector3(_site.x, ground + TowerHeight, _site.z);
 
             var post = Instantiate(ZNetScene.instance.GetPrefab(PostPrefab), postPosition, Quaternion.identity);
-            // The test has no tower below the post, so it must not collapse.
-            post.GetComponent<WearNTear>().m_noSupportWear = false;
             foreach (var placed in post.GetComponents<IPlaced>())
             {
                 placed.OnPlaced();
@@ -169,9 +171,6 @@ namespace Scenario
         {
             var name = $"combat {distance:0}m";
             ClearOtherCharacters(archerObject);
-            ClearFiringLane();
-            yield return null;
-            Physics.SyncTransforms();
             var archer = archerObject.GetComponent<Character>();
             archer.SetHealth(archer.GetMaxHealth());
 
@@ -182,6 +181,7 @@ namespace Scenario
             targetCharacter.m_speed = targetCharacter.m_walkSpeed = targetCharacter.m_runSpeed = 0f;
             targetCharacter.SetMaxHealth(100000f);
             targetCharacter.SetHealth(100000f);
+            yield return StartCoroutine(ClearView(archer, targetCharacter));
 
             Target = targetCharacter;
             Shots = 0;
@@ -261,22 +261,28 @@ namespace Scenario
                 $"eye={eye} targetPos={target.transform.position} targetEye={targetEye} rayLength={ray.magnitude:0.0} hits=[{string.Join(" ", hits)}]");
         }
 
-        // A real base has no forest around its tower. Removes objects that block the view along +X.
-        private void ClearFiringLane()
+        // A real base has no forest around its tower. Removes what blocks the view of a target.
+        private IEnumerator ClearView(Character viewer, Character target)
         {
             var removed = 0;
-            foreach (var collider in Physics.OverlapSphere(_site, 60f, BaseAI.m_viewBlockMask))
+            for (var pass = 0; pass < 3; pass++)
             {
-                var offset = collider.bounds.center - _site;
-                var view = collider.GetComponentInParent<ZNetView>();
-                if (offset.x > -3f && Mathf.Abs(offset.z) < 8f && view && view.GetZDO() != null
-                    && !view.GetComponent<Piece>() && !view.GetComponent<Character>())
+                var eye = viewer.m_eye.position;
+                var ray = (target.IsCrouching() ? target.GetCenterPoint() : target.m_eye.position) - eye;
+                foreach (var hit in Physics.RaycastAll(eye, ray.normalized, ray.magnitude, BaseAI.m_viewBlockMask))
                 {
-                    ZNetScene.instance.Destroy(view.gameObject);
-                    removed++;
+                    var view = hit.collider.GetComponentInParent<ZNetView>();
+                    if (view && view.GetZDO() != null && !view.GetComponent<Piece>() && !view.GetComponent<Character>())
+                    {
+                        view.ClaimOwnership();
+                        ZNetScene.instance.Destroy(view.gameObject);
+                        removed++;
+                    }
                 }
+                yield return new WaitForFixedUpdate();
+                Physics.SyncTransforms();
             }
-            Report($"INFO cleared firing lane: removed={removed}");
+            Report($"INFO cleared view of {target.name}: removed={removed}");
         }
 
         // Lists each ZDO within 3 m of the site, to show what a save and a load keep.
@@ -328,6 +334,11 @@ namespace Scenario
             var ally = SpawnOnGround("Boar", _site + new Vector3(20f, 0f, 3f));
             ally.GetComponent<Character>().m_faction = Character.Faction.Players;
             yield return new WaitForSeconds(1f);
+            // The archer must see these creatures, or this round proves nothing.
+            var archerCharacter = archerObject.GetComponent<Character>();
+            yield return StartCoroutine(ClearView(archerCharacter, tamed.GetComponent<Character>()));
+            yield return StartCoroutine(ClearView(archerCharacter, ally.GetComponent<Character>()));
+            Check("friendly creatures are visible", ai.CanSeeTarget(tamed.GetComponent<Character>()) && ai.CanSeeTarget(ally.GetComponent<Character>()), "");
 
             Shots = 0;
             var targeted = false;
