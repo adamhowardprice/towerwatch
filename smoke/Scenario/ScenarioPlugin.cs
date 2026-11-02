@@ -122,6 +122,7 @@ namespace Scenario
                 float.Parse(parts[0], CultureInfo.InvariantCulture),
                 float.Parse(parts[1], CultureInfo.InvariantCulture),
                 float.Parse(parts[2], CultureInfo.InvariantCulture));
+            LogZdoState("after load, area inactive");
             yield return StartCoroutine(ActivateArea(_site));
             if (!_areaReady)
             {
@@ -168,6 +169,9 @@ namespace Scenario
         {
             var name = $"combat {distance:0}m";
             ClearOtherCharacters(archerObject);
+            ClearFiringLane();
+            yield return null;
+            Physics.SyncTransforms();
             var archer = archerObject.GetComponent<Character>();
             archer.SetHealth(archer.GetMaxHealth());
 
@@ -257,8 +261,47 @@ namespace Scenario
                 $"eye={eye} targetPos={target.transform.position} targetEye={targetEye} rayLength={ray.magnitude:0.0} hits=[{string.Join(" ", hits)}]");
         }
 
+        // A real base has no forest around its tower. Removes objects that block the view along +X.
+        private void ClearFiringLane()
+        {
+            var removed = 0;
+            foreach (var collider in Physics.OverlapSphere(_site, 60f, BaseAI.m_viewBlockMask))
+            {
+                var offset = collider.bounds.center - _site;
+                var view = collider.GetComponentInParent<ZNetView>();
+                if (offset.x > -3f && Mathf.Abs(offset.z) < 8f && view && view.GetZDO() != null
+                    && !view.GetComponent<Piece>() && !view.GetComponent<Character>())
+                {
+                    ZNetScene.instance.Destroy(view.gameObject);
+                    removed++;
+                }
+            }
+            Report($"INFO cleared firing lane: removed={removed}");
+        }
+
+        // Lists each ZDO within 3 m of the site, to show what a save and a load keep.
+        private void LogObjectsAtPost(string label)
+        {
+            var nearby = new List<ZDO>();
+            ZDOMan.instance.FindSectorObjects(ZoneSystem.GetZone(_site), new SimulationDistance(1, 0), nearby);
+            var items = nearby
+                .Where(zdo => Utils.DistanceXZ(zdo.GetPosition(), _site) < 3f)
+                .Select(zdo =>
+                {
+                    var prefab = ZNetScene.instance.GetPrefab(zdo.GetPrefab());
+                    return $"{(prefab ? prefab.name : zdo.GetPrefab().ToString())}#{zdo.m_uid} y={zdo.GetPosition().y:0.0} persistent={zdo.Persistent} owner={zdo.GetOwner()}";
+                });
+            var others = nearby.Where(zdo => !zdo.Persistent).Select(zdo =>
+            {
+                var prefab = ZNetScene.instance.GetPrefab(zdo.GetPrefab());
+                return prefab ? prefab.name : zdo.GetPrefab().ToString();
+            });
+            Report($"DIAG objects {label}: atPost=[{string.Join("; ", items)}] nonPersistentNearby=[{string.Join(",", others)}]");
+        }
+
         private void LogZdoState(string label)
         {
+            LogObjectsAtPost(label);
             var sector = ZoneSystem.GetZone(_site);
             var nearby = new List<ZDO>();
             ZDOMan.instance.FindSectorObjects(sector, new SimulationDistance(1, 0), nearby);
@@ -282,7 +325,7 @@ namespace Scenario
             tamed.GetComponent<Character>().SetTamed(true);
             // No player exists on the server. An untamed Players faction creature takes the same
             // IsEnemy branch as a player.
-            var ally = SpawnOnGround("Boar", _site + new Vector3(-12f, 0f, 0f));
+            var ally = SpawnOnGround("Boar", _site + new Vector3(20f, 0f, 3f));
             ally.GetComponent<Character>().m_faction = Character.Faction.Players;
             yield return new WaitForSeconds(1f);
 
