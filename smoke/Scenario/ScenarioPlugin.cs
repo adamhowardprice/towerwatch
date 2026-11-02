@@ -26,6 +26,9 @@ namespace Scenario
         internal static Character Archer;
         internal static Character Target;
         internal static int Shots;
+        internal static int AttackStarts;
+        internal static int AttackRefusals;
+        internal static int AttackTriggers;
         internal static int Hits;
         internal static float LastHitFire;
         internal static Vector3? Focus;
@@ -107,6 +110,7 @@ namespace Scenario
 
             var statePath = Environment.GetEnvironmentVariable("SCENARIO_STATE");
             File.WriteAllText(statePath, string.Format(CultureInfo.InvariantCulture, "{0} {1} {2}", _site.x, _site.y, _site.z));
+            LogZdoState("before save");
             ZNet.instance.Save(sync: true);
             Report($"INFO saved world, archer id before restart={archerId}");
         }
@@ -123,7 +127,9 @@ namespace Scenario
             {
                 yield break;
             }
+            LogZdoState("after restart, area active");
             yield return new WaitForSeconds(5f);
+            LogZdoState("after restart, 5s later");
 
             Check("one post after restart", CountZdos(PostPrefab) == 1, $"count={CountZdos(PostPrefab)}");
             Check("one archer after restart", CountZdos(ArcherPrefab) == 1, $"count={CountZdos(ArcherPrefab)}");
@@ -180,9 +186,18 @@ namespace Scenario
             var maxDrift = 0f;
             var firstShot = -1f;
             var burned = false;
+            AttackStarts = 0;
+            AttackRefusals = 0;
+            AttackTriggers = 0;
+            var nextSample = 0f;
             var start = Time.time;
             while (Time.time - start < 30f)
             {
+                if (Time.time - start >= nextSample)
+                {
+                    nextSample += 5f;
+                    LogAttackState(name, archerObject, targetCharacter);
+                }
                 maxDrift = Mathf.Max(maxDrift, Vector3.Distance(archerObject.transform.position, anchor));
                 if (firstShot < 0f && Shots > 0)
                 {
@@ -204,6 +219,38 @@ namespace Scenario
 
             Target = null;
             ZNetScene.instance.Destroy(target);
+        }
+
+        // Reports each stage that an attack must pass, to show where an attack stops.
+        private void LogAttackState(string round, GameObject archerObject, Character target)
+        {
+            var humanoid = archerObject.GetComponent<Humanoid>();
+            var ai = archerObject.GetComponent<MonsterAI>();
+            var weapon = humanoid.GetCurrentWeapon();
+            var animator = archerObject.GetComponentInChildren<Animator>();
+            var state = animator.GetCurrentAnimatorStateInfo(0);
+            var targetName = ai.GetTargetCreature() ? ai.GetTargetCreature().name : "none";
+            Report($"DIAG {round}: target={targetName} alerted={ai.IsAlerted()} see={ai.CanSeeTarget(target)} hear={ai.CanHearTarget(target)} " +
+                $"weapon={weapon?.m_dropPrefab?.name ?? weapon?.m_shared.m_name ?? "none"} rightItem={humanoid.m_rightItem?.m_shared.m_name ?? "none"} " +
+                $"looking={ai.IsLookingAt(target.transform.position, 15f)} inAttack={humanoid.InAttack()} sinceLast={humanoid.GetTimeSinceLastAttack():0.0} " +
+                $"starts={AttackStarts} refusals={AttackRefusals} triggers={AttackTriggers} shots={Shots} " +
+                $"animState={state.shortNameHash} animTime={state.normalizedTime:0.00} animEnabled={animator.enabled} canMove={humanoid.CanMove()} sleeping={ai.IsSleeping()} eye={humanoid.m_eye.position}");
+        }
+
+        private void LogZdoState(string label)
+        {
+            var sector = ZoneSystem.GetZone(_site);
+            var nearby = new List<ZDO>();
+            ZDOMan.instance.FindSectorObjects(sector, new SimulationDistance(1, 0), nearby);
+            var groups = nearby.GroupBy(zdo => zdo.Persistent).Select(group => $"persistent={group.Key}:{group.Count()}");
+            var posts = new List<ZDO>();
+            var index = 0;
+            while (!ZDOMan.instance.GetAllZDOsWithPrefabIterative(PostPrefab, posts, ref index))
+            {
+            }
+            var post = posts.FirstOrDefault();
+            Report($"DIAG zdo {label}: zone={sector} nearby={nearby.Count} [{string.Join(" ", groups)}] totalZdos={ZDOMan.instance.m_objectsByID.Count} " +
+                $"posts={posts.Count} postPersistent={post?.Persistent} postPosition={post?.GetPosition()} generated={ZoneSystem.instance.IsZoneGenerated(sector)} placedLocations={ZoneSystem.instance.m_generatedZones.Count}");
         }
 
         private IEnumerator FriendlyRound(GameObject archerObject, Vector3 anchor)
@@ -436,6 +483,39 @@ namespace Scenario
             if (ScenarioPlugin.Focus.HasValue)
             {
                 pos = ScenarioPlugin.Focus.Value;
+            }
+        }
+    }
+
+    // Humanoid.StartAttack sets the animation trigger, or refuses the attack.
+    [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.StartAttack))]
+    internal static class StartAttackPatch
+    {
+        private static void Postfix(Humanoid __instance, bool __result)
+        {
+            if (__instance == ScenarioPlugin.Archer)
+            {
+                if (__result)
+                {
+                    ScenarioPlugin.AttackStarts++;
+                }
+                else
+                {
+                    ScenarioPlugin.AttackRefusals++;
+                }
+            }
+        }
+    }
+
+    // An animation event calls Humanoid.OnAttackTrigger to release the attack.
+    [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.OnAttackTrigger))]
+    internal static class OnAttackTriggerPatch
+    {
+        private static void Prefix(Humanoid __instance)
+        {
+            if (__instance == ScenarioPlugin.Archer)
+            {
+                ScenarioPlugin.AttackTriggers++;
             }
         }
     }

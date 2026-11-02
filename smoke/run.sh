@@ -82,6 +82,9 @@ run_phase() {
     wait "$pid" 2>/dev/null || true
     cp "$LOG" "$phase_log" 2>/dev/null || true
 
+    echo "=== Save files after phase $phase"
+    find "$CACHE/saves" -type f -exec ls -l {} + | sed "s|$CACHE/saves/||" | tee "$LOGS/savefiles-$phase.txt" || true
+
     echo "=== Phase $phase"
     grep -E "SCENARIO" "$phase_log" | sed 's/^\[[^]]*\] *//' || true
 

@@ -18,12 +18,13 @@ namespace TowerArchers.Prefabs
         {
             var creature = new CustomCreature(PrefabName, BasePrefab, new CreatureConfig
             {
-                Name = "Tower Archer",
                 Faction = Character.Faction.Players,
             });
             _prefab = creature.Prefab;
 
             var humanoid = _prefab.GetComponent<Humanoid>();
+            // The CustomCreature constructor replaces CreatureConfig.Name with the prefab name.
+            humanoid.m_name = "Tower Archer";
             humanoid.m_group = "";
             humanoid.m_defaultItems = new[] { ArcherBow.Prefab };
             humanoid.m_randomWeapon = new GameObject[0];
