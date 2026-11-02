@@ -25,6 +25,7 @@ fetch-full: image
 
 # Boots the real server with the mod. Run fetch-full first.
 smoke: build
+	$(RUN) dotnet build smoke/Scenario/Scenario.csproj -c Release -p:VALHEIM_INSTALL=/work/$(SERVER_DIR)
 	docker build --platform linux/amd64 -t $(IMAGE)-smoke smoke
 	docker run --rm --platform linux/amd64 -v "$(CURDIR)":/work $(IMAGE)-smoke sh /work/smoke/run.sh
 

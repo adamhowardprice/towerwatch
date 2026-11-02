@@ -47,7 +47,7 @@ The DLL is at `src/TowerArchers/bin/Release/TowerArchers.dll`. The r2modman pack
 Other commands:
 
 - `make decompile` writes the game source to `.decompiled/`, to check names.
-- `make fetch-full` downloads the whole server (about 2 GB). `make smoke` then boots it with the mod. This needs an x86-64 host, so the `Smoke` GitHub Actions workflow runs it. The workflow uploads the logs and the package as artifacts.
+- `make fetch-full` downloads the whole server (about 2 GB). `make smoke` then boots it with the mod and the test plugin in `smoke/Scenario/`. The plugin spawns a post, an archer, and targets in a live world, and it restarts the server to test the saved world. This needs an x86-64 host, so the `Smoke` GitHub Actions workflow runs it. The workflow uploads the logs and the package as artifacts. The test plugin is not part of the package.
 
 To build with a local .NET SDK and deploy to a game folder:
 
