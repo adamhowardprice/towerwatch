@@ -195,6 +195,10 @@ namespace Scenario
             {
                 if (Time.time - start >= nextSample)
                 {
+                    if (nextSample == 5f)
+                    {
+                        LogLineOfSight(name, archerObject, targetCharacter);
+                    }
                     nextSample += 5f;
                     LogAttackState(name, archerObject, targetCharacter);
                 }
@@ -235,6 +239,22 @@ namespace Scenario
                 $"looking={ai.IsLookingAt(target.transform.position, 15f)} inAttack={humanoid.InAttack()} sinceLast={humanoid.GetTimeSinceLastAttack():0.0} " +
                 $"starts={AttackStarts} refusals={AttackRefusals} triggers={AttackTriggers} shots={Shots} " +
                 $"animState={state.shortNameHash} animTime={state.normalizedTime:0.00} animEnabled={animator.enabled} canMove={humanoid.CanMove()} sleeping={ai.IsSleeping()} eye={humanoid.m_eye.position}");
+        }
+
+        // Repeats the tests in BaseAI.CanSeeTarget, to show which test fails.
+        private void LogLineOfSight(string round, GameObject archerObject, Character target)
+        {
+            var character = archerObject.GetComponent<Character>();
+            var ai = archerObject.GetComponent<MonsterAI>();
+            var eye = character.m_eye.position;
+            var targetEye = target.IsCrouching() ? target.GetCenterPoint() : target.m_eye.position;
+            var ray = targetEye - eye;
+            var hits = Physics.RaycastAll(eye, ray.normalized, ray.magnitude, BaseAI.m_viewBlockMask)
+                .OrderBy(hit => hit.distance)
+                .Select(hit => $"{hit.collider.transform.root.name}/{hit.collider.name}[{LayerMask.LayerToName(hit.collider.gameObject.layer)}]@{hit.distance:0.0}m");
+            Report($"DIAG sight {round}: distance={Vector3.Distance(target.transform.position, archerObject.transform.position):0.0} viewRange={ai.m_viewRange} viewAngle={ai.m_viewAngle} " +
+                $"hearRange={ai.m_hearRange} alertRange={ai.m_alertRange} stealth={target.GetStealthFactor():0.00} noise={target.GetNoiseRange():0.0} mist={ParticleMist.IsMistBlocked(eye, targetEye)} " +
+                $"eye={eye} targetPos={target.transform.position} targetEye={targetEye} rayLength={ray.magnitude:0.0} hits=[{string.Join(" ", hits)}]");
         }
 
         private void LogZdoState(string label)
