@@ -24,7 +24,7 @@ jobs:
       - name: Download the dedicated server
         run: make fetch-full
 
-      - name: Run the proof of concept
+      - name: Run the server test
         run: make smoke
 
       # Upload only logs. Never upload .valheim-server, which has game files.
