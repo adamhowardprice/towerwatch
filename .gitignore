@@ -1,0 +1,11 @@
+bin/
+obj/
+dist/
+smoke-logs/
+.vs/
+*.user
+
+# Game assemblies and decompiled game code. Do not commit or redistribute these.
+.valheim-server/
+.decompiled/
+assembly_*.dll
