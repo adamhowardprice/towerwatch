@@ -10,7 +10,7 @@ using UnityEngine;
 namespace TowerWatch
 {
     /// <summary>
-    /// CI test mode for the proof of concept. It runs only when TOWERWATCH_PHASE is set, and it
+    /// CI test mode. It runs only when TOWERWATCH_PHASE is set, and it
     /// plays the part of a player: it places a floor and a sign, and it spawns targets.
     /// </summary>
     public class Scenario : MonoBehaviour

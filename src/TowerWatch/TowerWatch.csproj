@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Throwaway proof of concept: one DLL on the dedicated server, and no client install. -->
+  <!-- One DLL on the dedicated server, and no client install. -->
   <PropertyGroup>
     <TargetFramework>net462</TargetFramework>
     <AssemblyName>TowerWatch</AssemblyName>

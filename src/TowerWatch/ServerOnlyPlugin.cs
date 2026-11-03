@@ -9,7 +9,7 @@ using UnityEngine;
 namespace TowerWatch
 {
     /// <summary>
-    /// Throwaway proof of concept. Only the dedicated server has this DLL. A vanilla sign with the
+    /// Only the dedicated server has this DLL. A vanilla sign with the
     /// text "[archer]" gets one tamed vanilla Draugr_Ranged. The server keeps the active area on
     /// the tower, owns only the archers, and leaves all other objects to the players.
     /// </summary>
