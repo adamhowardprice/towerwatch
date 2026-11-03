@@ -28,7 +28,10 @@ namespace TowerWatch
         public const float AttackInterval = 2.5f;
         public const float ArcherHealth = 150f;
         public const float LeashDistance = 6f;
+        public const float ArrowVelocity = 60f;
+        public const float ArrowSpread = 1f;
 
+        public static float ArrowGravity;
         public static Vector3? Focus;
         public static readonly HashSet<ZDOID> ExtraOwned = new HashSet<ZDOID>();
 
@@ -85,7 +88,20 @@ namespace TowerWatch
             bow.m_aiAttackRange = AttackRange;
             bow.m_aiAttackRangeMin = 0f;
             bow.m_aiAttackInterval = AttackInterval;
-            Logger.LogInfo($"Bow: projectile={bow.m_attack.m_attackProjectile.name} animation={bow.m_attack.m_attackAnimation} velocity={bow.m_attack.m_projectileVel} bowDraw={bow.m_attack.m_bowDraw} fire={bow.m_damages.m_fire} pierce={bow.m_damages.m_pierce}");
+
+            var attack = bow.m_attack;
+            var projectile = attack.m_attackProjectile.GetComponent<Projectile>();
+            Logger.LogInfo($"Bow before tuning: velocity={attack.m_projectileVel} velocityMin={attack.m_projectileVelMin} randomVelocity={attack.m_randomVelocity} accuracy={attack.m_projectileAccuracy} accuracyMin={attack.m_projectileAccuracyMin} skillAccuracy={attack.m_skillAccuracy} launchAngle={attack.m_launchAngle} gravity={projectile.m_gravity} drag={projectile.m_drag} ttl={projectile.m_ttl}");
+
+            // With m_skillAccuracy, an attacker with no skill uses m_projectileAccuracyMin.
+            attack.m_skillAccuracy = false;
+            attack.m_projectileAccuracy = ArrowSpread;
+            attack.m_projectileAccuracyMin = ArrowSpread;
+            attack.m_randomVelocity = false;
+            attack.m_projectileVel = ArrowVelocity;
+            attack.m_projectileVelMin = ArrowVelocity;
+            ArrowGravity = projectile.m_gravity;
+            Logger.LogInfo($"Bow: projectile={projectile.name} animation={attack.m_attackAnimation} velocity={attack.m_projectileVel} spread={attack.m_projectileAccuracy} bowDraw={attack.m_bowDraw} fire={bow.m_damages.m_fire} pierce={bow.m_damages.m_pierce}");
         }
 
         public static List<ZDO> FindZdos(string prefab)
@@ -304,6 +320,40 @@ namespace TowerWatch
                     guard.Hold();
                 }
             }
+        }
+    }
+
+    // Attack.GetProjectileSpawnPoint aims straight at the center of the target. An arrow falls and
+    // the target moves during the flight, so archers aim ahead of the target and above it.
+    // Spread and launch angle apply after this hook.
+    [HarmonyPatch(typeof(Attack), nameof(Attack.GetProjectileSpawnPoint))]
+    internal static class GetProjectileSpawnPointPatch
+    {
+        private static void Postfix(Attack __instance, Vector3 spawnPoint, ref Vector3 aimDir)
+        {
+            if (!__instance.m_character || !__instance.m_character.GetComponent<ArcherGuard>() || !__instance.m_baseAI)
+            {
+                return;
+            }
+
+            var target = __instance.m_baseAI.GetTargetCreature();
+            if (!target)
+            {
+                return;
+            }
+
+            var center = target.GetCenterPoint();
+            var velocity = target.GetVelocity();
+            var speed = __instance.m_projectileVel;
+            var flightTime = Vector3.Distance(center, spawnPoint) / speed;
+            var aimPoint = center;
+            for (var i = 0; i < 3; i++)
+            {
+                aimPoint = center + velocity * flightTime;
+                flightTime = Vector3.Distance(aimPoint, spawnPoint) / speed;
+            }
+            aimPoint.y += 0.5f * ServerOnlyPlugin.ArrowGravity * flightTime * flightTime;
+            aimDir = (aimPoint - spawnPoint).normalized;
         }
     }
 

@@ -100,9 +100,10 @@ namespace TowerWatch
             Check("patrol point set", ai.GetPatrolPoint(out var anchor), $"anchor={anchor}");
 
             yield return StartCoroutine(OwnershipCheck("before combat", archerObject));
-            yield return StartCoroutine(CombatRound(archerObject, anchor, 15f, true));
+            yield return StartCoroutine(CombatRound(archerObject, anchor, 15f, false));
             yield return StartCoroutine(CombatRound(archerObject, anchor, 30f, false));
             yield return StartCoroutine(CombatRound(archerObject, anchor, 45f, false));
+            yield return StartCoroutine(CombatRound(archerObject, anchor, 30f, true));
             yield return StartCoroutine(FriendlyRound(archerObject));
 
             File.WriteAllText(Environment.GetEnvironmentVariable("TOWERWATCH_STATE"), string.Format(CultureInfo.InvariantCulture, "{0} {1} {2}", _site.x, _site.y, _site.z));
@@ -141,9 +142,9 @@ namespace TowerWatch
             Check("still tamed after restart", Archer.IsTamed(), "");
             Check("patrol point after restart", ai.GetPatrolPoint(out var anchor), $"anchor={anchor}");
             yield return StartCoroutine(OwnershipCheck("after restart", archerObject));
-            yield return StartCoroutine(CombatRound(archerObject, anchor, 15f, true));
+            yield return StartCoroutine(CombatRound(archerObject, anchor, 15f, false));
 
-            var sign = ServerOnlyPlugin.FindZdos(ServerOnlyPlugin.SignPrefab).First();
+            var sign =ServerOnlyPlugin.FindZdos(ServerOnlyPlugin.SignPrefab).First();
             var signInstance = ZNetScene.instance.FindInstance(sign);
             signInstance.ClaimOwnership();
             ZNetScene.instance.Destroy(signInstance.gameObject);
@@ -165,16 +166,20 @@ namespace TowerWatch
             Check($"server owns only archers ({label})", others.Count == 0 && owned.Count == 1, $"nearby={nearby.Count} owned={owned.Count} nonArchers={others.Count} [{string.Join(",", names)}]");
         }
 
-        private IEnumerator CombatRound(GameObject archerObject, Vector3 anchor, float distance, bool mustHit)
+        private IEnumerator CombatRound(GameObject archerObject, Vector3 anchor, float distance, bool moving)
         {
-            var name = $"combat {distance:0}m";
+            var name = $"combat {distance:0}m{(moving ? " moving" : "")}";
             var archer = archerObject.GetComponent<Character>();
             archer.SetHealth(archer.GetMaxHealth());
 
             var target = SpawnOnGround("Greydwarf", _site + new Vector3(distance, 0f, 0f));
             var targetCharacter = target.GetComponent<Character>();
-            // A still target with high health gives a hit rate that depends only on the arrows.
-            targetCharacter.m_speed = targetCharacter.m_walkSpeed = targetCharacter.m_runSpeed = 0f;
+            // A still target gives a hit rate that depends only on the arrows. A moving target keeps
+            // its normal AI, and it approaches the tower. High health keeps both alive.
+            if (!moving)
+            {
+                targetCharacter.m_speed = targetCharacter.m_walkSpeed = targetCharacter.m_runSpeed = 0f;
+            }
             targetCharacter.SetMaxHealth(100000f);
             targetCharacter.SetHealth(100000f);
             foreach (var animator in target.GetComponentsInChildren<Animator>())
@@ -214,9 +219,10 @@ namespace TowerWatch
             Report($"INFO {name}: starts={Starts} refusals={Refusals} triggers={Triggers} shots={Shots} hits={Hits} damage={100000f - targetCharacter.GetHealth():0} arrowFire={LastHitFire:0} burned={burned} maxDrift={maxDrift:0.00}m distance={Vector3.Distance(archerObject.transform.position, target.transform.position):0.0}m");
             Check($"{name} fires", Shots > 0, $"starts={Starts} triggers={Triggers} shots={Shots}");
             Check($"{name} stays on post", maxDrift < 1f, $"maxDrift={maxDrift:0.00}m");
-            if (mustHit)
+            Check($"{name} hits with fire", Hits > 0 && LastHitFire > 0f, $"hits={Hits}/{Shots} fire={LastHitFire:0}");
+            if (!moving)
             {
-                Check($"{name} hits with fire", Hits > 0 && LastHitFire > 0f, $"hits={Hits} fire={LastHitFire:0}");
+                Check($"{name} hits at least half of its shots", Hits * 2 >= Shots, $"hits={Hits}/{Shots}");
             }
 
             Target = null;
